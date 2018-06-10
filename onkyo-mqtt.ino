@@ -16,7 +16,7 @@
 #define AMP_COMMANDS_TOPIC "home/livingroom/amp/commands"
 #define AMP_LOGS_TOPIC "home/livingroom/amp/logs"
 #define AMP_STATE_TOPIC "home/livingroom/amp/state"
-#define AMP_source_TOPIC "home/livingroom/amp/source"
+#define AMP_SOURCE_TOPIC "home/livingroom/amp/source"
 
 // RI
 #define ONKYO_PIN 5
@@ -127,7 +127,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     }
   } else if (parseRoot.containsKey("source")) {
     String source = parseRoot["source"];
-    sendTopic = AMP_source_TOPIC;
+    sendTopic = AMP_SOURCE_TOPIC;
 
     if (source == "cd") {
       onkyoClient.send(0x20);
