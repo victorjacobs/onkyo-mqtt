@@ -23,6 +23,7 @@
 
 // OTA
 #define OTA_NAME "<ota-name>"
+#define OTA_PASSWORD "<ota-password>"
 
 WiFiClient wifiClient;
 PubSubClient pubSubClient(wifiClient);
@@ -40,6 +41,7 @@ void setup() {
 
 void setupOTA() {
   ArduinoOTA.setHostname(OTA_NAME);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
 
   ArduinoOTA.begin();
 }
@@ -98,52 +100,57 @@ void loop() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  StaticJsonBuffer<300> jsonBuffer;
+  StaticJsonDocument<300> payloadDocument;
+  StaticJsonDocument<300> resultDocument;
+  DeserializationError err = deserializeJson(payloadDocument, payload);
 
-  JsonObject& parseRoot = jsonBuffer.parseObject(payload);
-
-  if (!parseRoot.success()) {
+  if (err) {
     String payloadString = String((char *) payload);
     pubSubClient.publish(AMP_LOGS_TOPIC, (String("Failed to parse JSON: ") + payloadString).c_str(), true);
     return;
   }
 
-  JsonObject& sendRoot = jsonBuffer.createObject();
   String sendTopic;
   bool failedToParse = false;
 
-  if (parseRoot.containsKey("state")) {
-    String state = parseRoot["state"];
+  if (payloadDocument.containsKey("state")) {
+    String state = payloadDocument["state"];
     sendTopic = AMP_STATE_TOPIC;
 
     if (state == "on") {
       onkyoClient.send(0x2f);
-      sendRoot["state"] = "on";
+      resultDocument["state"] = "on";
     } else if (state == "off") {
       onkyoClient.send(0xda);
-      sendRoot["state"] = "off";
+      resultDocument["state"] = "off";
+    } else if (state == "reset") {
+      ESP.reset();
     } else {
       failedToParse = true;
     }
-  } else if (parseRoot.containsKey("source")) {
-    String source = parseRoot["source"];
+  } else if (payloadDocument.containsKey("source")) {
+    String source = payloadDocument["source"];
     sendTopic = AMP_SOURCE_TOPIC;
 
     if (source == "cd") {
       onkyoClient.send(0x20);
-      sendRoot["source"] = "cd";
+      resultDocument["source"] = "cd";
     } else if (source == "dock") {
       onkyoClient.send(0x170);
-      sendRoot["source"] = "dock";
+      resultDocument["source"] = "dock";
     } else {
       failedToParse = true;
     }
-  } else if (parseRoot.containsKey("volume")) {
-    String volume = parseRoot["volume"];
+  } else if (payloadDocument.containsKey("volume")) {
+    String volume = payloadDocument["volume"];
 
     if (volume == "up") {
       onkyoClient.send(0x2);
+      delay(250);
+      onkyoClient.send(0x2);
     } else if (volume == "down") {
+      onkyoClient.send(0x3);
+      delay(250);
       onkyoClient.send(0x3);
     } else {
       failedToParse = true;
@@ -157,8 +164,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  char buffer[sendRoot.measureLength() + 1];
-  sendRoot.printTo(buffer, sizeof(buffer));
-  pubSubClient.publish(sendTopic.c_str(), buffer, true);
+  char outputBuffer[300];
+  serializeJson(resultDocument, outputBuffer);
+  pubSubClient.publish(sendTopic.c_str(), outputBuffer, true);
 }
-
